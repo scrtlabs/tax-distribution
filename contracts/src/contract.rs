@@ -1,10 +1,12 @@
 use cosmwasm_std::{
-    debug_print, to_binary, Api, Binary, Env, Extern, HandleResponse, HandleResult, InitResponse,
-    InitResult, Querier, QueryResult, StdError, StdResult, Storage,
+    debug_print, plaintext_log, to_binary, Api, BankMsg, Binary, Coin, CosmosMsg, Env, Extern,
+    HandleResponse, HandleResult, HumanAddr, InitResponse, InitResult, Querier, QueryResult,
+    StdError, StdResult, Storage, Uint128,
 };
 
 use crate::msg::{HandleMsg, InitMsg, QueryMsg};
 use crate::state::{Beneficiaries, Beneficiary, Config};
+use crate::util::send_native_token_msg;
 
 pub fn init<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
@@ -34,30 +36,75 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
     msg: HandleMsg,
 ) -> HandleResult {
     match msg {
-        HandleMsg::Withdraw { .. } => withdraw(deps, env),
-        HandleMsg::ChangeAdmin { .. } => change_admin(deps, env),
-        HandleMsg::ChangeBeneficiaries { .. } => change_beneficiaries(deps, env),
+        HandleMsg::Withdraw { amount } => withdraw(deps, env, amount.map(|a| a.u128())),
+        HandleMsg::ChangeAdmin { new_admin } => change_admin(deps, env, new_admin),
+        HandleMsg::ChangeBeneficiaries { beneficiaries } => {
+            change_beneficiaries(deps, env, beneficiaries)
+        }
     }
 }
 
 pub fn withdraw<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     env: Env,
+    amount: Option<u128>,
 ) -> HandleResult {
-    unimplemented!()
+    let config = Config::load(&deps.storage)?;
+
+    let beneficiary = match Beneficiary::load(&deps.storage, &env.message.sender)? {
+        None => return Err(StdError::unauthorized()),
+        Some(b) => b,
+    };
+    let balance = beneficiary.check_beneficiary_balance(&deps.querier, &config)?;
+    let amount = amount.unwrap_or(balance);
+
+    if amount > balance {
+        return Err(StdError::generic_err(format!(
+            "insufficient staked funds to redeem: balance={}, required={}",
+            balance, amount,
+        )));
+    }
+
+    Ok(HandleResponse {
+        messages: vec![send_native_token_msg(
+            beneficiary.address.clone(),
+            amount,
+            &config,
+        )],
+        log: vec![
+            plaintext_log("tax_redeemed", beneficiary.address),
+            plaintext_log("amount", amount),
+        ],
+        data: None,
+    })
 }
 
 pub fn change_admin<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     env: Env,
+    new_admin: HumanAddr,
 ) -> HandleResult {
-    unimplemented!()
+    let mut config = Config::load(&deps.storage)?;
+    config.assert_admin(&env.message.sender)?;
+
+    config.admin = new_admin.clone();
+
+    Ok(HandleResponse {
+        messages: vec![],
+        log: vec![plaintext_log("changed_admin", new_admin)],
+        data: None,
+    })
 }
 
 pub fn change_beneficiaries<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     env: Env,
+    beneficiaries: Vec<Beneficiary>,
 ) -> HandleResult {
+    // for b in beneficiaries {
+    //
+    // }
+
     unimplemented!()
 }
 

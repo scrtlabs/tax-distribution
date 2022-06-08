@@ -1,6 +1,7 @@
 use crate::querier::check_token_balance;
 use cosmwasm_std::{
-    Api, CanonicalAddr, Extern, HumanAddr, Querier, ReadonlyStorage, StdResult, Storage, Uint128,
+    Api, CanonicalAddr, Extern, HumanAddr, Querier, ReadonlyStorage, StdError, StdResult, Storage,
+    Uint128,
 };
 use cosmwasm_storage::{PrefixedStorage, ReadonlyPrefixedStorage};
 use primitive_types::U256;
@@ -20,12 +21,23 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn load<S: ReadonlyStorage>(storage: &S) -> StdResult<Option<Self>> {
-        TypedStore::attach(storage).may_load(CONFIG_KEY)
+    pub fn load<S: ReadonlyStorage>(storage: &S) -> StdResult<Self> {
+        TypedStore::attach(storage).load(CONFIG_KEY)
     }
 
     pub fn save<S: Storage>(&self, storage: &mut S) -> StdResult<()> {
         TypedStoreMut::attach(storage).store(CONFIG_KEY, self)
+    }
+
+    pub fn assert_admin(&self, address: &HumanAddr) -> StdResult<()> {
+        if address != &self.admin {
+            return Err(StdError::generic_err(format!(
+                "Address {} is not allowed to perform this operation",
+                address
+            )));
+        }
+
+        Ok(())
     }
 }
 
