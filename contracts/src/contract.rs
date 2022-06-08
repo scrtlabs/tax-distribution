@@ -67,6 +67,7 @@ pub fn change_admin<S: Storage, A: Api, Q: Querier>(
     config.assert_admin(&env.message.sender)?;
 
     config.admin = new_admin.clone();
+    config.save(&mut deps.storage)?;
 
     Ok(HandleResponse {
         messages: vec![],
