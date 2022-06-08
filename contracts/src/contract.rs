@@ -1,7 +1,10 @@
-use cosmwasm_std::{debug_print, to_binary, Api, Binary, Env, Extern, HandleResponse, InitResponse, Querier, StdError, StdResult, Storage, InitResult, HandleResult, QueryResult};
+use cosmwasm_std::{
+    debug_print, to_binary, Api, Binary, Env, Extern, HandleResponse, HandleResult, InitResponse,
+    InitResult, Querier, QueryResult, StdError, StdResult, Storage,
+};
 
 use crate::msg::{HandleMsg, InitMsg, QueryMsg};
-use crate::state::{Config, Beneficiaries};
+use crate::state::{Beneficiaries, Beneficiary, Config};
 
 pub fn init<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
@@ -9,10 +12,18 @@ pub fn init<S: Storage, A: Api, Q: Querier>(
     msg: InitMsg,
 ) -> InitResult {
     Config {
-        admin: env.message.sender
-    }.save(&mut deps.storage)?;
+        self_addr: env.contract.address,
+        admin: env.message.sender,
+        tx_denom: msg.tax_denom.unwrap_or("uscrt".to_string()),
+    }
+    .save(&mut deps.storage)?;
 
-    Beneficiaries::save(msg.beneficiaries, &mut deps.storage)?;
+    let mut ben_addresses = vec![];
+    for b in msg.beneficiaries {
+        b.save(&mut deps.storage)?;
+        ben_addresses.push(b.address);
+    }
+    Beneficiaries::save(ben_addresses, &mut deps.storage)?;
 
     Ok(InitResponse::default())
 }
@@ -50,19 +61,14 @@ pub fn change_beneficiaries<S: Storage, A: Api, Q: Querier>(
     unimplemented!()
 }
 
-pub fn query<S: Storage, A: Api, Q: Querier>(
-    deps: &Extern<S, A, Q>,
-    msg: QueryMsg,
-) -> QueryResult {
+pub fn query<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>, msg: QueryMsg) -> QueryResult {
     match msg {
         QueryMsg::GetBeneficiaries { .. } => get_beneficiaries(deps),
         QueryMsg::GetBeneficiaryBalance { .. } => get_beneficiary_balance(deps),
     }
 }
 
-pub fn get_beneficiaries<S: Storage, A: Api, Q: Querier>(
-    deps: &Extern<S, A, Q>,
-) -> QueryResult {
+pub fn get_beneficiaries<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>) -> QueryResult {
     unimplemented!()
 }
 
