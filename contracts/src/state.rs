@@ -43,54 +43,64 @@ impl Config {
 }
 
 #[derive(Serialize, Deserialize, JsonSchema)]
-struct BeneficiaryWeight {
-    rate: u16,
-    decimal_places_in_rate: u8,
-}
-
-impl Display for BeneficiaryWeight {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "rate: {}, decimal_places_in_rate: {}",
-            self.rate, self.decimal_places_in_rate
-        )
-    }
-}
-
-#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct Beneficiary {
     pub address: HumanAddr,
-    weight: BeneficiaryWeight,
+    weight: u16,
 }
 
 impl Display for Beneficiary {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "address: {}, weight: {{ {} }}",
-            self.address, self.weight
-        )
+        write!(f, "address: {}, weight: {}", self.address, self.weight)
     }
 }
 
 impl Beneficiary {
-    pub fn check_beneficiary_balance(&self, total_balance: u128) -> StdResult<u128> {
-        let weight_denom = U256::from(10).pow(U256::from(self.weight.decimal_places_in_rate));
-        let balance = U256::from(total_balance * self.weight.rate as u128) / weight_denom;
-
-        Ok(balance.as_u128())
+    pub fn check_beneficiary_balance(
+        &self,
+        total_balance: u128,
+        total_weight: u16,
+    ) -> StdResult<u128> {
+        Ok(total_balance * self.weight as u128 / total_weight as u128)
     }
 }
 
-pub struct Beneficiaries {}
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct Beneficiaries {
+    pub list: Vec<Beneficiary>,
+    decimal_places_in_rates: u8,
+}
 
 impl Beneficiaries {
-    pub fn load<S: ReadonlyStorage>(storage: &S) -> StdResult<Vec<Beneficiary>> {
+    pub fn load<S: ReadonlyStorage>(storage: &S) -> StdResult<Self> {
         TypedStore::attach(storage).load(BENEFICIARIES_KEY)
     }
 
-    pub fn save<S: Storage>(storage: &mut S, beneficiaries: Vec<Beneficiary>) -> StdResult<()> {
-        TypedStoreMut::attach(storage).store(BENEFICIARIES_KEY, &beneficiaries)
+    pub fn save<S: Storage>(&self, storage: &mut S) -> StdResult<()> {
+        self.assert_valid()?;
+        TypedStoreMut::attach(storage).store(BENEFICIARIES_KEY, self)
+    }
+
+    fn assert_valid(&self) -> StdResult<bool> {
+        // Courtesy of @baedrik (https://github.com/baedrik/snip721-reference-impl/blob/632ce04/src/contract.rs#L4696)
+        // the allowed message length won't let enough u16 weights to overflow u128
+        let total_weights: u128 = self.list.iter().map(|r| r.weight as u128).sum();
+        let (weight_den, overflow) =
+            U256::from(10).overflowing_pow(U256::from(self.decimal_places_in_rates));
+        if overflow {
+            return Err(StdError::generic_err(
+                "The number of decimal places used in the weights is larger than supported",
+            ));
+        }
+        if U256::from(total_weights) > weight_den {
+            return Err(StdError::generic_err(
+                "The sum of royalty rates must not exceed 100%",
+            ));
+        }
+
+        Ok(true)
+    }
+
+    pub fn total_weight(&self) -> u16 {
+        self.list.iter().map(|b| b.weight).sum()
     }
 }

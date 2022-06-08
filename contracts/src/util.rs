@@ -17,17 +17,17 @@ pub fn send_native_token_msg(to: HumanAddr, amount: u128, config: &Config) -> Co
 
 pub fn withdraw_tax_for_everyone(
     config: &Config,
-    beneficiaries: Vec<Beneficiary>,
+    beneficiaries: Beneficiaries,
     total_balance: u128,
 ) -> StdResult<(Vec<CosmosMsg>, Vec<LogAttribute>)> {
     let mut messages = vec![];
     let mut log = vec![];
 
-    for b in beneficiaries {
-        let balance = b.check_beneficiary_balance(total_balance)?;
+    for b in &beneficiaries.list {
+        let balance = b.check_beneficiary_balance(total_balance, beneficiaries.total_weight())?;
         messages.push(send_native_token_msg(b.address.clone(), balance, &config));
         log.extend(vec![
-            plaintext_log("tax_redeemed", b.address),
+            plaintext_log("tax_redeemed", b.address.clone()),
             plaintext_log("amount", balance),
         ]);
     }

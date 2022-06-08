@@ -1,4 +1,4 @@
-use crate::state::Beneficiary;
+use crate::state::{Beneficiaries, Beneficiary};
 use cosmwasm_std::{HumanAddr, Uint128};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Deserialize, JsonSchema)]
 pub struct InitMsg {
     pub tax_denom: Option<String>,
-    pub beneficiaries: Vec<Beneficiary>,
+    pub beneficiaries: Beneficiaries,
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -16,7 +16,7 @@ pub enum HandleMsg {
 
     // Admin commands
     ChangeAdmin { new_admin: HumanAddr },
-    ChangeBeneficiaries { beneficiaries: Vec<Beneficiary> },
+    ChangeBeneficiaries { beneficiaries: Beneficiaries },
 }
 
 #[derive(Deserialize, JsonSchema)]
