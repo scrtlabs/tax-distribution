@@ -5,6 +5,7 @@ use cosmwasm_std::{
 };
 
 use crate::msg::{HandleMsg, InitMsg, QueryMsg};
+use crate::querier::check_token_balance;
 use crate::state::{Beneficiaries, Beneficiary, Config};
 use crate::util::send_native_token_msg;
 
@@ -20,12 +21,7 @@ pub fn init<S: Storage, A: Api, Q: Querier>(
     }
     .save(&mut deps.storage)?;
 
-    let mut ben_addresses = vec![];
-    for b in msg.beneficiaries {
-        b.save(&mut deps.storage)?;
-        ben_addresses.push(b.address);
-    }
-    Beneficiaries::save(ben_addresses, &mut deps.storage)?;
+    Beneficiaries::save(&mut deps.storage, msg.beneficiaries)?;
 
     Ok(InitResponse::default())
 }
@@ -36,7 +32,7 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
     msg: HandleMsg,
 ) -> HandleResult {
     match msg {
-        HandleMsg::Withdraw { amount } => withdraw(deps, env, amount.map(|a| a.u128())),
+        HandleMsg::Withdraw { amount } => withdraw(deps),
         HandleMsg::ChangeAdmin { new_admin } => change_admin(deps, env, new_admin),
         HandleMsg::ChangeBeneficiaries { beneficiaries } => {
             change_beneficiaries(deps, env, beneficiaries)
@@ -44,37 +40,28 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
     }
 }
 
-pub fn withdraw<S: Storage, A: Api, Q: Querier>(
-    deps: &mut Extern<S, A, Q>,
-    env: Env,
-    amount: Option<u128>,
-) -> HandleResult {
+pub fn withdraw<S: Storage, A: Api, Q: Querier>(deps: &mut Extern<S, A, Q>) -> HandleResult {
     let config = Config::load(&deps.storage)?;
 
-    let beneficiary = match Beneficiary::load(&deps.storage, &env.message.sender)? {
-        None => return Err(StdError::unauthorized()),
-        Some(b) => b,
-    };
-    let balance = beneficiary.check_beneficiary_balance(&deps.querier, &config)?;
-    let amount = amount.unwrap_or(balance);
+    let mut messages = vec![];
+    let mut log = vec![];
 
-    if amount > balance {
-        return Err(StdError::generic_err(format!(
-            "insufficient staked funds to redeem: balance={}, required={}",
-            balance, amount,
-        )));
+    let total_balance = check_token_balance(&deps.querier, &config)?;
+    if total_balance == 0 {
+        return Ok(HandleResponse::default());
+    }
+
+    let beneficiaries = Beneficiaries::load(&deps.storage)?;
+    for b in beneficiaries {
+        let balance = b.check_beneficiary_balance(total_balance)?;
+        messages.push(send_native_token_msg(b.address.clone(), balance, &config));
+        log.push(plaintext_log("tax_redeemed", b.address));
+        log.push(plaintext_log("amount", balance));
     }
 
     Ok(HandleResponse {
-        messages: vec![send_native_token_msg(
-            beneficiary.address.clone(),
-            amount,
-            &config,
-        )],
-        log: vec![
-            plaintext_log("tax_redeemed", beneficiary.address),
-            plaintext_log("amount", amount),
-        ],
+        messages,
+        log,
         data: None,
     })
 }
