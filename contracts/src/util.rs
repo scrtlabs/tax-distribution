@@ -1,7 +1,6 @@
-use crate::state::{Beneficiaries, Beneficiary, Config};
+use crate::state::{Beneficiaries, Config};
 use cosmwasm_std::{
-    plaintext_log, BankMsg, Coin, CosmosMsg, HandleResponse, HandleResult, HumanAddr, LogAttribute,
-    StdResult, Uint128,
+    plaintext_log, BankMsg, Coin, CosmosMsg, HumanAddr, LogAttribute, StdResult, Uint128,
 };
 
 pub fn send_native_token_msg(to: HumanAddr, amount: u128, config: &Config) -> CosmosMsg {
@@ -25,7 +24,7 @@ pub fn withdraw_tax_for_everyone(
 
     for b in &beneficiaries.list {
         let balance = b.check_beneficiary_balance(total_balance, beneficiaries.total_weight())?;
-        messages.push(send_native_token_msg(b.address.clone(), balance, &config));
+        messages.push(send_native_token_msg(b.address.clone(), balance, config));
         log.extend(vec![
             plaintext_log("tax_redeemed", b.address.clone()),
             plaintext_log("amount", balance),

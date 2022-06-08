@@ -1,7 +1,7 @@
-use crate::state::{Beneficiaries, Beneficiary};
-use cosmwasm_std::{HumanAddr, Uint128};
+use crate::state::Beneficiaries;
+use cosmwasm_std::HumanAddr;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 #[derive(Deserialize, JsonSchema)]
 pub struct InitMsg {
@@ -12,7 +12,7 @@ pub struct InitMsg {
 #[derive(Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum HandleMsg {
-    Withdraw { amount: Option<Uint128> },
+    Withdraw {},
 
     // Admin commands
     ChangeAdmin { new_admin: HumanAddr },

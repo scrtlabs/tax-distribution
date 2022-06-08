@@ -1,9 +1,4 @@
-use crate::querier::check_token_balance;
-use cosmwasm_std::{
-    Api, CanonicalAddr, Extern, HumanAddr, Querier, ReadonlyStorage, StdError, StdResult, Storage,
-    Uint128,
-};
-use cosmwasm_storage::{PrefixedStorage, ReadonlyPrefixedStorage};
+use cosmwasm_std::{HumanAddr, ReadonlyStorage, StdError, StdResult, Storage};
 use primitive_types::U256;
 use schemars::JsonSchema;
 use secret_toolkit::storage::{TypedStore, TypedStoreMut};

@@ -1,13 +1,12 @@
 use cosmwasm_std::{
-    debug_print, plaintext_log, to_binary, Api, BankMsg, Binary, Coin, CosmosMsg, Env, Extern,
-    HandleResponse, HandleResult, HumanAddr, InitResponse, InitResult, Querier, QueryResult,
-    StdError, StdResult, Storage, Uint128,
+    plaintext_log, to_binary, Api, Env, Extern, HandleResponse, HandleResult, HumanAddr,
+    InitResponse, InitResult, Querier, QueryResult, StdError, Storage, Uint128,
 };
 
 use crate::msg::{HandleMsg, InitMsg, QueryMsg};
 use crate::querier::check_token_balance;
-use crate::state::{Beneficiaries, Beneficiary, Config};
-use crate::util::{send_native_token_msg, withdraw_tax_for_everyone};
+use crate::state::{Beneficiaries, Config};
+use crate::util::withdraw_tax_for_everyone;
 
 pub fn init<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
@@ -17,7 +16,7 @@ pub fn init<S: Storage, A: Api, Q: Querier>(
     Config {
         self_addr: env.contract.address,
         admin: env.message.sender,
-        tax_denom: msg.tax_denom.unwrap_or("uscrt".to_string()),
+        tax_denom: msg.tax_denom.unwrap_or_else(|| "uscrt".to_string()),
     }
     .save(&mut deps.storage)?;
 
@@ -32,7 +31,7 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
     msg: HandleMsg,
 ) -> HandleResult {
     match msg {
-        HandleMsg::Withdraw { amount } => withdraw(deps),
+        HandleMsg::Withdraw {} => withdraw(deps),
         HandleMsg::ChangeAdmin { new_admin } => change_admin(deps, env, new_admin),
         HandleMsg::ChangeBeneficiaries { beneficiaries } => {
             change_beneficiaries(deps, env, beneficiaries)
@@ -114,7 +113,7 @@ pub fn query<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>, msg: QueryM
 
 pub fn get_beneficiaries<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>) -> QueryResult {
     let beneficiaries = Beneficiaries::load(&deps.storage)?;
-    Ok(to_binary(&beneficiaries)?)
+    to_binary(&beneficiaries)
 }
 
 pub fn get_beneficiary_balance<S: Storage, A: Api, Q: Querier>(
@@ -132,7 +131,7 @@ pub fn get_beneficiary_balance<S: Storage, A: Api, Q: Querier>(
     let balance =
         beneficiary.check_beneficiary_balance(total_balance, beneficiaries.total_weight())?;
 
-    Ok(to_binary(&Uint128::from(balance))?)
+    to_binary(&Uint128::from(balance))
 }
 
 #[cfg(test)]
