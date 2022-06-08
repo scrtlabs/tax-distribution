@@ -5,8 +5,8 @@ use crate::state::Beneficiary;
 
 #[derive(Deserialize, JsonSchema)]
 pub struct InitMsg {
-    tax_denom: Option<String>,
-    beneficiaries: Vec<Beneficiary>,
+    pub tax_denom: Option<String>,
+    pub beneficiaries: Vec<Beneficiary>,
 }
 
 #[derive(Deserialize, JsonSchema)]
