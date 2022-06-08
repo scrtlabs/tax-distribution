@@ -7,7 +7,7 @@ use cosmwasm_std::{
 use crate::msg::{HandleMsg, InitMsg, QueryMsg};
 use crate::querier::check_token_balance;
 use crate::state::{Beneficiaries, Beneficiary, Config};
-use crate::util::send_native_token_msg;
+use crate::util::{send_native_token_msg, withdraw_tax_for_everyone};
 
 pub fn init<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
@@ -17,7 +17,7 @@ pub fn init<S: Storage, A: Api, Q: Querier>(
     Config {
         self_addr: env.contract.address,
         admin: env.message.sender,
-        tx_denom: msg.tax_denom.unwrap_or("uscrt".to_string()),
+        tax_denom: msg.tax_denom.unwrap_or("uscrt".to_string()),
     }
     .save(&mut deps.storage)?;
 
@@ -43,21 +43,13 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
 pub fn withdraw<S: Storage, A: Api, Q: Querier>(deps: &mut Extern<S, A, Q>) -> HandleResult {
     let config = Config::load(&deps.storage)?;
 
-    let mut messages = vec![];
-    let mut log = vec![];
-
     let total_balance = check_token_balance(&deps.querier, &config)?;
     if total_balance == 0 {
         return Ok(HandleResponse::default());
     }
 
     let beneficiaries = Beneficiaries::load(&deps.storage)?;
-    for b in beneficiaries {
-        let balance = b.check_beneficiary_balance(total_balance)?;
-        messages.push(send_native_token_msg(b.address.clone(), balance, &config));
-        log.push(plaintext_log("tax_redeemed", b.address));
-        log.push(plaintext_log("amount", balance));
-    }
+    let (messages, log) = withdraw_tax_for_everyone(&config, beneficiaries, total_balance)?;
 
     Ok(HandleResponse {
         messages,
@@ -86,13 +78,30 @@ pub fn change_admin<S: Storage, A: Api, Q: Querier>(
 pub fn change_beneficiaries<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     env: Env,
-    beneficiaries: Vec<Beneficiary>,
+    new_beneficiaries: Vec<Beneficiary>,
 ) -> HandleResult {
-    // for b in beneficiaries {
-    //
-    // }
+    let config = Config::load(&deps.storage)?;
+    config.assert_admin(&env.message.sender)?;
 
-    unimplemented!()
+    let mut messages = vec![];
+    let mut log = vec![];
+
+    let total_balance = check_token_balance(&deps.querier, &config)?;
+    if total_balance != 0 {
+        let beneficiaries = Beneficiaries::load(&deps.storage)?;
+        (messages, log) = withdraw_tax_for_everyone(&config, beneficiaries, total_balance)?;
+    }
+
+    for nb in &new_beneficiaries {
+        log.push(plaintext_log("updated beneficiary", nb));
+    }
+    Beneficiaries::save(&mut deps.storage, new_beneficiaries)?;
+
+    Ok(HandleResponse {
+        messages,
+        log,
+        data: None,
+    })
 }
 
 pub fn query<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>, msg: QueryMsg) -> QueryResult {

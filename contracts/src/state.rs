@@ -8,6 +8,7 @@ use primitive_types::U256;
 use schemars::JsonSchema;
 use secret_toolkit::storage::{TypedStore, TypedStoreMut};
 use serde::{Deserialize, Serialize};
+use std::fmt::{Display, Formatter};
 
 pub static CONFIG_KEY: &[u8] = b"config";
 pub static BENEFICIARIES_KEY: &[u8] = b"beneficiaries";
@@ -17,7 +18,7 @@ pub static BENEFICIARY_PREFIX: &[u8] = b"beneficiary";
 pub struct Config {
     pub self_addr: HumanAddr,
     pub admin: HumanAddr,
-    pub tx_denom: String,
+    pub tax_denom: String,
 }
 
 impl Config {
@@ -47,10 +48,30 @@ struct BeneficiaryWeight {
     decimal_places_in_rate: u8,
 }
 
+impl Display for BeneficiaryWeight {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "rate: {}, decimal_places_in_rate: {}",
+            self.rate, self.decimal_places_in_rate
+        )
+    }
+}
+
 #[derive(Serialize, Deserialize, JsonSchema)]
 pub struct Beneficiary {
     pub address: HumanAddr,
     weight: BeneficiaryWeight,
+}
+
+impl Display for Beneficiary {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "address: {}, weight: {{ {} }}",
+            self.address, self.weight
+        )
+    }
 }
 
 impl Beneficiary {
