@@ -10,7 +10,7 @@ pub fn send_native_token_msg(to: HumanAddr, amount: u128, config: &Config) -> Co
         to_address: to,
         amount: vec![Coin {
             denom: config.tax_denom.clone(),
-            amount: Uint128(amount),
+            amount: Uint128::from(amount),
         }],
     })
 }

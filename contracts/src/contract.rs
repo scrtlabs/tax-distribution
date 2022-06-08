@@ -106,19 +106,31 @@ pub fn change_beneficiaries<S: Storage, A: Api, Q: Querier>(
 
 pub fn query<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>, msg: QueryMsg) -> QueryResult {
     match msg {
-        QueryMsg::GetBeneficiaries { .. } => get_beneficiaries(deps),
-        QueryMsg::GetBeneficiaryBalance { .. } => get_beneficiary_balance(deps),
+        QueryMsg::GetBeneficiaries {} => get_beneficiaries(deps),
+        QueryMsg::GetBeneficiaryBalance { address } => get_beneficiary_balance(deps, address),
     }
 }
 
 pub fn get_beneficiaries<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>) -> QueryResult {
-    unimplemented!()
+    let beneficiaries = Beneficiaries::load(&deps.storage)?;
+    Ok(to_binary(&beneficiaries)?)
 }
 
 pub fn get_beneficiary_balance<S: Storage, A: Api, Q: Querier>(
     deps: &Extern<S, A, Q>,
+    address: HumanAddr,
 ) -> QueryResult {
-    unimplemented!()
+    let config = Config::load(&deps.storage)?;
+    let beneficiaries = Beneficiaries::load(&deps.storage)?;
+    let beneficiary = match beneficiaries.into_iter().find(|b| b.address == address) {
+        None => return Err(StdError::generic_err("no such beneficiary exists")),
+        Some(b) => b,
+    };
+
+    let total_balance = check_token_balance(&deps.querier, &config)?;
+    let balance = beneficiary.check_beneficiary_balance(total_balance)?;
+
+    Ok(to_binary(&Uint128::from(balance))?)
 }
 
 #[cfg(test)]
