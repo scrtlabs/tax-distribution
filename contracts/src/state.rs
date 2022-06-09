@@ -79,6 +79,7 @@ impl TaxPool {
 }
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[cfg_attr(test, derive(Clone))]
 pub struct Beneficiary {
     pub address: HumanAddr,
     pub weight: u16,

@@ -215,6 +215,266 @@ pub fn get_admin<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>) -> Quer
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cosmwasm_std::testing::{mock_dependencies, mock_env};
-    use cosmwasm_std::{coins, from_binary, StdError};
+    use cosmwasm_std::testing::{
+        mock_dependencies, mock_env, MockApi, MockQuerier, MockStorage, MOCK_CONTRACT_ADDR,
+    };
+    use cosmwasm_std::{
+        coins, from_binary, BalanceResponse, BankQuery, Coin, QueryRequest, StdError, StdResult,
+    };
+
+    fn add_decimals(amount: u128) -> u128 {
+        amount * 10_u128.pow(6)
+    }
+
+    fn add_tax(
+        amount: u128,
+        deps: &mut Extern<MockStorage, MockApi, MockQuerier>,
+        total_tax_received: &mut u128,
+    ) -> StdResult<()> {
+        let config = Config {
+            self_addr: HumanAddr::from(MOCK_CONTRACT_ADDR),
+            admin: HumanAddr::from("admin"),
+            tax_denom: "uscrt".to_string(),
+        };
+        let contract_balance = query_token_balance(&deps.querier, &config)?;
+        let contract_addr = HumanAddr::from(MOCK_CONTRACT_ADDR);
+        deps.querier = MockQuerier::new(&[(
+            &contract_addr,
+            &[Coin {
+                denom: "uscrt".to_string(),
+                amount: Uint128::from(contract_balance + amount),
+            }],
+        )]);
+
+        *total_tax_received += amount;
+
+        Ok(())
+    }
+
+    fn withdraw_helper(
+        deps: &mut Extern<MockStorage, MockApi, MockQuerier>,
+        beneficiary: &str,
+        amount: Option<u128>,
+    ) -> HandleResult {
+        withdraw(deps, mock_env(HumanAddr::from(beneficiary), &[]), amount)
+    }
+
+    fn withdraw_tester(
+        deps: &mut Extern<MockStorage, MockApi, MockQuerier>,
+        beneficiary: &Beneficiary,
+        beneficiary_withdrawn: &mut u128,
+        amount: Option<u128>,
+        total_tax_received: u128,
+        total_withdrawn: &mut u128,
+        total_weight: u16,
+    ) -> StdResult<()> {
+        let config = Config {
+            self_addr: HumanAddr::from(MOCK_CONTRACT_ADDR),
+            admin: HumanAddr::from("admin"),
+            tax_denom: "uscrt".to_string(),
+        };
+
+        let expected = amount.unwrap_or(
+            total_tax_received * beneficiary.weight as u128 / total_weight as u128
+                - *beneficiary_withdrawn,
+        );
+        let result = withdraw_helper(deps, beneficiary.address.as_str(), amount)?;
+        assert_eq!(
+            result,
+            HandleResponse {
+                messages: vec![send_native_token_msg(
+                    &beneficiary.address,
+                    expected,
+                    &config
+                )],
+                log: vec![
+                    plaintext_log("tax_withdrawn", beneficiary.address.clone()),
+                    plaintext_log("amount", expected),
+                ],
+                data: None,
+            }
+        );
+
+        *beneficiary_withdrawn += expected;
+        *total_withdrawn += expected;
+
+        let contract_balance = query_token_balance(&deps.querier, &config)?;
+        deps.querier = MockQuerier::new(&[(
+            &config.self_addr,
+            &[Coin {
+                denom: "uscrt".to_string(),
+                amount: Uint128::from(contract_balance - expected),
+            }],
+        )]);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_sanity() -> StdResult<()> {
+        let mut deps = mock_dependencies(20, &[]);
+        let a = Beneficiary {
+            address: HumanAddr::from("a"),
+            weight: 350,
+        };
+        let b = Beneficiary {
+            address: HumanAddr::from("b"),
+            weight: 650,
+        };
+        let total_weight = a.weight + b.weight;
+
+        let init_error = init(
+            &mut deps,
+            mock_env(HumanAddr::from("admin"), &[]),
+            InitMsg {
+                tax_denom: None,
+                beneficiaries: vec![
+                    Beneficiary {
+                        address: HumanAddr::from("a"),
+                        weight: 350,
+                    },
+                    Beneficiary {
+                        address: HumanAddr::from("b"),
+                        weight: 350,
+                    },
+                ],
+                decimal_places_in_weights: 3,
+            },
+        )
+        .unwrap_err();
+
+        assert_eq!(
+            init_error,
+            StdError::generic_err("The sum of weights must be exactly 100%",)
+        );
+
+        let init_result = init(
+            &mut deps,
+            mock_env(HumanAddr::from("admin"), &[]),
+            InitMsg {
+                tax_denom: None,
+                beneficiaries: vec![a.clone(), b.clone()],
+                decimal_places_in_weights: 3,
+            },
+        );
+
+        assert!(init_result.is_ok());
+
+        let withdraw_err = withdraw_helper(&mut deps, "a", Some(add_decimals(2000))).unwrap_err();
+        assert_eq!(
+            withdraw_err,
+            StdError::generic_err(format!(
+                "insufficient funds to withdraw: balance={}, required={}",
+                0,
+                add_decimals(2000),
+            ))
+        );
+
+        let mut total_tax_received = 0;
+
+        add_tax(add_decimals(1000), &mut deps, &mut total_tax_received)?;
+        let withdraw_err = withdraw_helper(&mut deps, "a", Some(add_decimals(2000))).unwrap_err();
+        assert_eq!(
+            withdraw_err,
+            StdError::generic_err(format!(
+                "insufficient funds to withdraw: balance={}, required={}",
+                add_decimals(350),
+                add_decimals(2000),
+            ))
+        );
+
+        let mut sum_a = 0;
+        let mut sum_b = 0;
+        let mut withdrawn_a = 0;
+        let mut withdrawn_b = 0;
+        let mut total_withdrawn = 0;
+
+        withdraw_tester(
+            &mut deps,
+            &a,
+            &mut withdrawn_a,
+            Some(add_decimals(150)),
+            total_tax_received,
+            &mut total_withdrawn,
+            total_weight,
+        )?;
+        withdraw_tester(
+            &mut deps,
+            &a,
+            &mut withdrawn_a,
+            None,
+            total_tax_received,
+            &mut total_withdrawn,
+            total_weight,
+        )?;
+
+        add_tax(add_decimals(10_000), &mut deps, &mut total_tax_received)?;
+
+        withdraw_tester(
+            &mut deps,
+            &b,
+            &mut withdrawn_b,
+            None,
+            total_tax_received,
+            &mut total_withdrawn,
+            total_weight,
+        )?;
+
+        add_tax(add_decimals(10_000), &mut deps, &mut total_tax_received)?;
+        add_tax(add_decimals(123), &mut deps, &mut total_tax_received)?;
+
+        withdraw_tester(
+            &mut deps,
+            &b,
+            &mut withdrawn_b,
+            Some(add_decimals(70)),
+            total_tax_received,
+            &mut total_withdrawn,
+            total_weight,
+        )?;
+
+        withdraw_tester(
+            &mut deps,
+            &a,
+            &mut withdrawn_a,
+            Some(add_decimals(130)),
+            total_tax_received,
+            &mut total_withdrawn,
+            total_weight,
+        )?;
+
+        withdraw_tester(
+            &mut deps,
+            &b,
+            &mut withdrawn_b,
+            None,
+            total_tax_received,
+            &mut total_withdrawn,
+            total_weight,
+        )?;
+
+        withdraw_tester(
+            &mut deps,
+            &a,
+            &mut withdrawn_a,
+            None,
+            total_tax_received,
+            &mut total_withdrawn,
+            total_weight,
+        )?;
+
+        withdraw_tester(
+            &mut deps,
+            &b,
+            &mut withdrawn_b,
+            None,
+            total_tax_received,
+            &mut total_withdrawn,
+            total_weight,
+        )?;
+
+        assert_eq!(withdrawn_a + withdrawn_b, total_tax_received);
+
+        Ok(())
+    }
 }
