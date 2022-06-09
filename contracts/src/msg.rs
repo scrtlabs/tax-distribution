@@ -33,4 +33,5 @@ pub enum HandleMsg {
 pub enum QueryMsg {
     GetBeneficiaries {},
     GetBeneficiaryBalance { address: HumanAddr },
+    GetAdmin {},
 }

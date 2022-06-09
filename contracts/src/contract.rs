@@ -181,6 +181,7 @@ pub fn query<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>, msg: QueryM
     match msg {
         QueryMsg::GetBeneficiaries {} => get_beneficiaries(deps),
         QueryMsg::GetBeneficiaryBalance { address } => get_beneficiary_balance(deps, address),
+        QueryMsg::GetAdmin {} => get_admin(deps),
     }
 }
 
@@ -205,6 +206,12 @@ pub fn get_beneficiary_balance<S: Storage, A: Api, Q: Querier>(
     let balance = beneficiary.get_balance(&tax_pool);
 
     to_binary(&Uint128::from(balance))
+}
+
+pub fn get_admin<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>) -> QueryResult {
+    let config = Config::load(&deps.storage)?;
+
+    to_binary(&config.admin)
 }
 
 #[cfg(test)]
