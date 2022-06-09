@@ -1,4 +1,4 @@
-use crate::querier::check_token_balance;
+use crate::querier::query_token_balance;
 use cosmwasm_std::{
     Api, Extern, HumanAddr, Querier, ReadonlyStorage, StdError, StdResult, Storage,
 };
@@ -60,7 +60,7 @@ impl TaxPool {
     }
 
     pub fn update<Q: Querier>(&self, querier: &Q, config: &Config) -> StdResult<Self> {
-        let current_balance = check_token_balance(querier, config)?;
+        let current_balance = query_token_balance(querier, config)?;
         let new_total_income = current_balance + self.total_withdrawn;
         Ok(Self {
             total_weight: self.total_weight,

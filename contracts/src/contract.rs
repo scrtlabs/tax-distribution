@@ -4,6 +4,7 @@ use cosmwasm_std::{
 };
 
 use crate::msg::{HandleMsg, InitMsg, QueryMsg};
+use crate::querier::query_token_balance;
 use crate::state::{BeneficiariesList, Beneficiary, Config, StoredBeneficiary, TaxPool};
 use crate::util::send_native_token_msg;
 
@@ -42,6 +43,7 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
             beneficiaries,
             decimal_places_in_weights,
         } => set_beneficiaries(deps, env, beneficiaries, decimal_places_in_weights),
+        HandleMsg::EmergencyWithdraw {} => emergency_withdraw(deps, env),
     }
 }
 
@@ -142,6 +144,25 @@ pub fn set_beneficiaries<S: Storage, A: Api, Q: Querier>(
     Ok(HandleResponse {
         messages,
         log,
+        data: None,
+    })
+}
+
+pub fn emergency_withdraw<S: Storage, A: Api, Q: Querier>(
+    deps: &mut Extern<S, A, Q>,
+    env: Env,
+) -> HandleResult {
+    let config = Config::load(&deps.storage)?;
+    config.assert_admin(&env.message.sender)?;
+
+    let balance = query_token_balance(&deps.querier, &config)?;
+
+    Ok(HandleResponse {
+        messages: vec![send_native_token_msg(&env.message.sender, balance, &config)],
+        log: vec![
+            plaintext_log("emergency_withdraw", env.message.sender),
+            plaintext_log("amount", balance),
+        ],
         data: None,
     })
 }

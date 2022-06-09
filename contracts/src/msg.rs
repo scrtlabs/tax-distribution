@@ -25,7 +25,7 @@ pub enum HandleMsg {
         beneficiaries: Vec<Beneficiary>,
         decimal_places_in_weights: u8,
     },
-    // todo add emergency redeem
+    EmergencyWithdraw {},
 }
 
 #[derive(Deserialize, JsonSchema)]
