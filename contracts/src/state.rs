@@ -77,7 +77,7 @@ impl Beneficiaries {
         TypedStoreMut::attach(storage).store(BENEFICIARIES_KEY, self)
     }
 
-    fn assert_valid(&self) -> StdResult<bool> {
+    fn assert_valid(&self) -> StdResult<()> {
         // Courtesy of @baedrik (https://github.com/baedrik/snip721-reference-impl/blob/632ce04/src/contract.rs#L4696)
         // the allowed message length won't let enough u16 weights to overflow u128
         let total_weights: u128 = self.list.iter().map(|r| r.weight as u128).sum();
@@ -94,7 +94,7 @@ impl Beneficiaries {
             ));
         }
 
-        Ok(true)
+        Ok(())
     }
 
     pub fn total_weight(&self) -> u16 {
