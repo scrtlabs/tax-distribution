@@ -22,8 +22,9 @@ pub fn withdraw_tax_for_everyone(
     let mut messages = vec![];
     let mut log = vec![];
 
+    let total_weight = beneficiaries.total_weight();
     for b in &beneficiaries.list {
-        let balance = b.check_beneficiary_balance(total_balance, beneficiaries.total_weight())?;
+        let balance = b.check_beneficiary_balance(total_balance, total_weight)?;
         messages.push(send_native_token_msg(b.address.clone(), balance, config));
         log.extend(vec![
             plaintext_log("tax_redeemed", b.address.clone()),
