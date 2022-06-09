@@ -4,9 +4,8 @@ use cosmwasm_std::{
 };
 
 use crate::msg::{HandleMsg, InitMsg, QueryMsg};
-use crate::querier::query_token_balance;
 use crate::state::{BeneficiariesList, Beneficiary, Config, StoredBeneficiary, TaxPool};
-use crate::util::send_native_token_msg;
+use crate::util::{query_token_balance, send_native_token_msg};
 
 pub fn init<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,

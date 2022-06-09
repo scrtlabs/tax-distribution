@@ -1,4 +1,4 @@
-use crate::querier::query_token_balance;
+use crate::util::query_token_balance;
 use cosmwasm_std::{
     Api, Extern, HumanAddr, Querier, ReadonlyStorage, StdError, StdResult, Storage,
 };
