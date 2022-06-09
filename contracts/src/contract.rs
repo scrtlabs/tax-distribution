@@ -26,7 +26,12 @@ pub fn init<S: Storage, A: Api, Q: Querier>(
         msg.decimal_places_in_weights,
     )?;
 
-    TaxPool::default().save(&mut deps.storage)?;
+    TaxPool {
+        total_weight: 10_u16.pow(msg.decimal_places_in_weights as u32),
+        total_withdrawn: 0,
+        acc_tax_per_share: 0,
+    }
+    .save(&mut deps.storage)?;
 
     Ok(InitResponse::default())
 }
@@ -55,7 +60,7 @@ pub fn withdraw<S: Storage, A: Api, Q: Querier>(
     let config = Config::load(&deps.storage)?;
     let mut beneficiary =
         StoredBeneficiary::load(&deps.storage, &env.message.sender)?.unwrap_or_default();
-    let mut tax_pool = TaxPool::load_updated(deps, &config /*env.block.height*/)?;
+    let mut tax_pool = TaxPool::load_updated(deps, &config)?;
 
     let beneficiary_balance = beneficiary.get_balance(&tax_pool);
     let amount = amount.unwrap_or(beneficiary_balance); // If not specified - get everything
@@ -111,17 +116,17 @@ pub fn set_beneficiaries<S: Storage, A: Api, Q: Querier>(
 
     let mut messages = vec![];
     let mut log = vec![];
-    let tax_pool = TaxPool::load_updated(deps, &config /*env.block.height*/)?;
+    let tax_pool = TaxPool::load_updated(deps, &config)?;
 
     // Send all tokens to existing beneficiaries and delete
-    let current = BeneficiariesList::load(&deps.storage)?;
-    for b_addr in current {
+    let current_beneficiaries = BeneficiariesList::load(&deps.storage)?;
+    for b_addr in current_beneficiaries {
         let b = StoredBeneficiary::load(&deps.storage, &b_addr)?.unwrap_or_default();
         let balance = b.get_balance(&tax_pool);
 
         messages.push(send_native_token_msg(&b_addr, balance, &config));
         log.extend(vec![
-            plaintext_log("tax_redeemed", b_addr.clone()),
+            plaintext_log("tax_withdrawn", b_addr.clone()),
             plaintext_log("amount", balance),
         ]);
 
@@ -134,7 +139,12 @@ pub fn set_beneficiaries<S: Storage, A: Api, Q: Querier>(
         &new_beneficiaries,
         decimal_places_in_weights,
     )?;
-    TaxPool::default().save(&mut deps.storage)?;
+    TaxPool {
+        total_weight: 10_u16.pow(decimal_places_in_weights as u32),
+        total_withdrawn: 0,
+        acc_tax_per_share: 0,
+    }
+    .save(&mut deps.storage)?;
 
     log.push(plaintext_log(
         "beneficiaries updated",

@@ -10,8 +10,8 @@ use serde::{Deserialize, Serialize};
 
 pub static CONFIG_KEY: &[u8] = b"config";
 pub static TAX_POOL_KEY: &[u8] = b"tax_pool";
-pub static BENEFICIARY_PREFIX: &[u8] = b"beneficiary";
 pub static BENEFICIARIES_LIST_KEY: &[u8] = b"beneficiaries_list";
+pub static BENEFICIARY_PREFIX: &[u8] = b"beneficiary";
 
 pub const REWARD_SCALE: u128 = 1_000_000_000_000_000_000; // 10 ^ 18
 
@@ -45,9 +45,9 @@ impl Config {
 
 #[derive(Serialize, Deserialize, Default, Clone)]
 pub struct TaxPool {
-    total_weight: u16,
+    pub total_weight: u16,
     pub total_withdrawn: u128,
-    acc_tax_per_share: u128,
+    pub acc_tax_per_share: u128,
 }
 
 impl TaxPool {
@@ -74,7 +74,7 @@ impl TaxPool {
         config: &Config,
     ) -> StdResult<Self> {
         let tax_pool = Self::load(&deps.storage)?;
-        tax_pool.update(&deps.querier, config /*block*/)
+        tax_pool.update(&deps.querier, config)
     }
 }
 
