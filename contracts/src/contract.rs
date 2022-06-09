@@ -72,7 +72,7 @@ pub fn withdraw<S: Storage, A: Api, Q: Querier>(
         )));
     }
 
-    beneficiary.debt += amount;
+    beneficiary.withdrawn += amount;
     tax_pool.total_withdrawn += amount;
     beneficiary.save(&mut deps.storage, &env.message.sender)?;
     tax_pool.save(&mut deps.storage)?;
@@ -201,11 +201,10 @@ pub fn get_beneficiary_balance<S: Storage, A: Api, Q: Querier>(
     address: HumanAddr,
 ) -> QueryResult {
     let config = Config::load(&deps.storage)?;
-    let tax_pool = TaxPool::load_updated(deps, &config /*env.block.height*/)?;
+    let tax_pool = TaxPool::load_updated(deps, &config)?;
     let beneficiary = StoredBeneficiary::load(&deps.storage, &address)?.unwrap_or_default();
-    let balance = beneficiary.get_balance(&tax_pool);
 
-    to_binary(&Uint128::from(balance))
+    to_binary(&Uint128::from(beneficiary.get_balance(&tax_pool)))
 }
 
 pub fn get_admin<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>) -> QueryResult {

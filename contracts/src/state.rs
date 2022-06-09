@@ -87,14 +87,14 @@ pub struct Beneficiary {
 #[derive(Serialize, Deserialize, Default)]
 pub struct StoredBeneficiary {
     pub weight: u16,
-    pub debt: u128,
+    pub withdrawn: u128,
 }
 
 impl StoredBeneficiary {
     pub fn new(beneficiary: &Beneficiary) -> Self {
         Self {
             weight: beneficiary.weight,
-            debt: 0,
+            withdrawn: 0,
         }
     }
 
@@ -120,7 +120,7 @@ impl StoredBeneficiary {
     pub fn get_balance(&self, tax_pool: &TaxPool) -> u128 {
         let cut = U256::from(self.weight) * U256::from(tax_pool.acc_tax_per_share)
             / U256::from(REWARD_SCALE)
-            - U256::from(self.debt);
+            - U256::from(self.withdrawn);
         cut.as_u128()
     }
 }
