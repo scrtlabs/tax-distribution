@@ -55,7 +55,9 @@ impl Beneficiary {
         total_balance: u128,
         total_weight: u16,
     ) -> StdResult<u128> {
-        Ok(total_balance * self.weight as u128 / total_weight as u128)
+        let balance =
+            U256::from(total_balance) * U256::from(self.weight) / U256::from(total_weight);
+        Ok(balance.as_u128())
     }
 }
 
