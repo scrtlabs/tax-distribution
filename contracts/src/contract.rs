@@ -4,9 +4,8 @@ use cosmwasm_std::{
 };
 
 use crate::msg::{HandleMsg, InitMsg, QueryMsg};
-use crate::querier::check_token_balance;
-use crate::state::{Beneficiaries, Config};
-use crate::util::withdraw_tax_for_everyone;
+use crate::state::{BeneficiariesList, Beneficiary, Config, StoredBeneficiary, TaxPool};
+use crate::util::send_native_token_msg;
 
 pub fn init<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
@@ -20,7 +19,13 @@ pub fn init<S: Storage, A: Api, Q: Querier>(
     }
     .save(&mut deps.storage)?;
 
-    msg.beneficiaries.save(&mut deps.storage)?;
+    BeneficiariesList::save(
+        &mut deps.storage,
+        &msg.beneficiaries,
+        msg.decimal_places_in_weights,
+    )?;
+
+    TaxPool::default().save(&mut deps.storage)?;
 
     Ok(InitResponse::default())
 }
@@ -31,28 +36,46 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
     msg: HandleMsg,
 ) -> HandleResult {
     match msg {
-        HandleMsg::Withdraw {} => withdraw(deps),
+        HandleMsg::Withdraw { amount } => withdraw(deps, env, amount.map(|a| a.u128())),
         HandleMsg::ChangeAdmin { new_admin } => change_admin(deps, env, new_admin),
-        HandleMsg::ChangeBeneficiaries { beneficiaries } => {
-            change_beneficiaries(deps, env, beneficiaries)
-        }
+        HandleMsg::SetBeneficiaries {
+            beneficiaries,
+            decimal_places_in_weights,
+        } => set_beneficiaries(deps, env, beneficiaries, decimal_places_in_weights),
     }
 }
 
-pub fn withdraw<S: Storage, A: Api, Q: Querier>(deps: &mut Extern<S, A, Q>) -> HandleResult {
+pub fn withdraw<S: Storage, A: Api, Q: Querier>(
+    deps: &mut Extern<S, A, Q>,
+    env: Env,
+    amount: Option<u128>,
+) -> HandleResult {
     let config = Config::load(&deps.storage)?;
+    let mut beneficiary =
+        StoredBeneficiary::load(&deps.storage, &env.message.sender)?.unwrap_or_default();
+    let mut tax_pool = TaxPool::load_updated(deps, &config /*env.block.height*/)?;
 
-    let total_balance = check_token_balance(&deps.querier, &config)?;
-    if total_balance == 0 {
-        return Ok(HandleResponse::default());
+    let beneficiary_balance = beneficiary.get_balance(&tax_pool);
+    let amount = amount.unwrap_or(beneficiary_balance); // If not specified - get everything
+
+    if amount > beneficiary_balance {
+        return Err(StdError::generic_err(format!(
+            "insufficient funds to withdraw: balance={}, required={}",
+            beneficiary_balance, amount,
+        )));
     }
 
-    let beneficiaries = Beneficiaries::load(&deps.storage)?;
-    let (messages, log) = withdraw_tax_for_everyone(&config, beneficiaries, total_balance)?;
+    beneficiary.debt += amount;
+    tax_pool.total_withdrawn += amount;
+    beneficiary.save(&mut deps.storage, &env.message.sender)?;
+    tax_pool.save(&mut deps.storage)?;
 
     Ok(HandleResponse {
-        messages,
-        log,
+        messages: vec![send_native_token_msg(&env.message.sender, amount, &config)],
+        log: vec![
+            plaintext_log("tax_withdrawn", env.message.sender),
+            plaintext_log("amount", amount),
+        ],
         data: None,
     })
 }
@@ -75,27 +98,46 @@ pub fn change_admin<S: Storage, A: Api, Q: Querier>(
     })
 }
 
-pub fn change_beneficiaries<S: Storage, A: Api, Q: Querier>(
+pub fn set_beneficiaries<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     env: Env,
-    new_beneficiaries: Beneficiaries,
+    new_beneficiaries: Vec<Beneficiary>,
+    decimal_places_in_weights: u8,
 ) -> HandleResult {
     let config = Config::load(&deps.storage)?;
     config.assert_admin(&env.message.sender)?;
 
     let mut messages = vec![];
     let mut log = vec![];
+    let tax_pool = TaxPool::load_updated(deps, &config /*env.block.height*/)?;
 
-    let total_balance = check_token_balance(&deps.querier, &config)?;
-    if total_balance != 0 {
-        let beneficiaries = Beneficiaries::load(&deps.storage)?;
-        (messages, log) = withdraw_tax_for_everyone(&config, beneficiaries, total_balance)?;
+    // Send all tokens to existing beneficiaries and delete
+    let current = BeneficiariesList::load(&deps.storage)?;
+    for b_addr in current {
+        let b = StoredBeneficiary::load(&deps.storage, &b_addr)?.unwrap_or_default();
+        let balance = b.get_balance(&tax_pool);
+
+        messages.push(send_native_token_msg(&b_addr, balance, &config));
+        log.extend(vec![
+            plaintext_log("tax_redeemed", b_addr.clone()),
+            plaintext_log("amount", balance),
+        ]);
+
+        StoredBeneficiary::delete(&mut deps.storage, &b_addr);
     }
 
-    for nb in &new_beneficiaries.list {
-        log.push(plaintext_log("updated beneficiary", nb));
-    }
-    new_beneficiaries.save(&mut deps.storage)?;
+    // Reset everything
+    BeneficiariesList::save(
+        &mut deps.storage,
+        &new_beneficiaries,
+        decimal_places_in_weights,
+    )?;
+    TaxPool::default().save(&mut deps.storage)?;
+
+    log.push(plaintext_log(
+        "beneficiaries updated",
+        format!("{:?}", new_beneficiaries),
+    ));
 
     Ok(HandleResponse {
         messages,
@@ -112,8 +154,14 @@ pub fn query<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>, msg: QueryM
 }
 
 pub fn get_beneficiaries<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>) -> QueryResult {
-    let beneficiaries = Beneficiaries::load(&deps.storage)?;
-    to_binary(&beneficiaries)
+    let beneficiaries = BeneficiariesList::load(&deps.storage)?;
+    let mut stored_beneficiaries = vec![];
+    for b_addr in beneficiaries {
+        let stored = StoredBeneficiary::load(&deps.storage, &b_addr)?.unwrap_or_default();
+        stored_beneficiaries.push(stored);
+    }
+
+    to_binary(&stored_beneficiaries)
 }
 
 pub fn get_beneficiary_balance<S: Storage, A: Api, Q: Querier>(
@@ -121,15 +169,9 @@ pub fn get_beneficiary_balance<S: Storage, A: Api, Q: Querier>(
     address: HumanAddr,
 ) -> QueryResult {
     let config = Config::load(&deps.storage)?;
-    let beneficiaries = Beneficiaries::load(&deps.storage)?;
-    let beneficiary = match beneficiaries.list.iter().find(|b| b.address == address) {
-        None => return Err(StdError::generic_err("no such beneficiary exists")),
-        Some(b) => b,
-    };
-
-    let total_balance = check_token_balance(&deps.querier, &config)?;
-    let balance =
-        beneficiary.check_beneficiary_balance(total_balance, beneficiaries.total_weight())?;
+    let tax_pool = TaxPool::load_updated(deps, &config /*env.block.height*/)?;
+    let beneficiary = StoredBeneficiary::load(&deps.storage, &address)?.unwrap_or_default();
+    let balance = beneficiary.get_balance(&tax_pool);
 
     to_binary(&Uint128::from(balance))
 }
