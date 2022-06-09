@@ -86,9 +86,9 @@ impl Beneficiaries {
                 "The number of decimal places used in the weights is larger than supported",
             ));
         }
-        if U256::from(total_weights) > weight_den {
+        if U256::from(total_weights) != weight_den {
             return Err(StdError::generic_err(
-                "The sum of royalty rates must not exceed 100%",
+                "The sum of weights must be exactly 100%",
             ));
         }
 
