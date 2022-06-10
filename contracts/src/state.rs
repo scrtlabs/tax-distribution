@@ -13,7 +13,7 @@ pub static TAX_POOL_KEY: &[u8] = b"tax_pool";
 pub static BENEFICIARIES_LIST_KEY: &[u8] = b"beneficiaries_list";
 pub static BENEFICIARY_PREFIX: &[u8] = b"beneficiary";
 
-pub const REWARD_SCALE: u128 = 1_000_000_000_000_000_000; // 10 ^ 18
+pub const REWARD_SCALE: u128 = 1_000_000_000_000; // 10 ^ 12
 
 #[derive(Serialize, Deserialize)]
 pub struct Config {
@@ -62,10 +62,13 @@ impl TaxPool {
     pub fn update<Q: Querier>(&self, querier: &Q, config: &Config) -> StdResult<Self> {
         let current_balance = query_token_balance(querier, config)?;
         let new_total_income = current_balance + self.total_withdrawn;
+        let new_acc_tax_per_share =
+            U256::from(new_total_income) * U256::from(REWARD_SCALE) / U256::from(self.total_weight);
+
         Ok(Self {
             total_weight: self.total_weight,
             total_withdrawn: self.total_withdrawn,
-            acc_tax_per_share: new_total_income * REWARD_SCALE / self.total_weight as u128,
+            acc_tax_per_share: new_acc_tax_per_share.as_u128(),
         })
     }
 

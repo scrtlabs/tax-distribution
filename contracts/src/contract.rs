@@ -56,34 +56,37 @@ pub fn withdraw<S: Storage, A: Api, Q: Querier>(
     env: Env,
     amount: Option<u128>,
 ) -> HandleResult {
-    let config = Config::load(&deps.storage)?;
-    let mut beneficiary =
-        StoredBeneficiary::load(&deps.storage, &env.message.sender)?.unwrap_or_default();
-    let mut tax_pool = TaxPool::load_updated(deps, &config)?;
+    let beneficiary = StoredBeneficiary::load(&deps.storage, &env.message.sender)?;
+    if let Some(mut beneficiary) = beneficiary {
+        let config = Config::load(&deps.storage)?;
+        let mut tax_pool = TaxPool::load_updated(deps, &config)?;
 
-    let beneficiary_balance = beneficiary.get_balance(&tax_pool);
-    let amount = amount.unwrap_or(beneficiary_balance); // If not specified - get everything
+        let beneficiary_balance = beneficiary.get_balance(&tax_pool);
+        let amount = amount.unwrap_or(beneficiary_balance); // If not specified - get everything
 
-    if amount > beneficiary_balance {
-        return Err(StdError::generic_err(format!(
-            "insufficient funds to withdraw: balance={}, required={}",
-            beneficiary_balance, amount,
-        )));
+        if amount > beneficiary_balance {
+            return Err(StdError::generic_err(format!(
+                "insufficient funds to withdraw: balance={}, required={}",
+                beneficiary_balance, amount,
+            )));
+        }
+
+        beneficiary.withdrawn += amount;
+        tax_pool.total_withdrawn += amount;
+        beneficiary.save(&mut deps.storage, &env.message.sender)?;
+        tax_pool.save(&mut deps.storage)?;
+
+        Ok(HandleResponse {
+            messages: vec![send_native_token_msg(&env.message.sender, amount, &config)],
+            log: vec![
+                plaintext_log("tax_withdrawn", env.message.sender),
+                plaintext_log("amount", amount),
+            ],
+            data: None,
+        })
+    } else {
+        Err(StdError::generic_err("not a beneficiary"))
     }
-
-    beneficiary.withdrawn += amount;
-    tax_pool.total_withdrawn += amount;
-    beneficiary.save(&mut deps.storage, &env.message.sender)?;
-    tax_pool.save(&mut deps.storage)?;
-
-    Ok(HandleResponse {
-        messages: vec![send_native_token_msg(&env.message.sender, amount, &config)],
-        log: vec![
-            plaintext_log("tax_withdrawn", env.message.sender),
-            plaintext_log("amount", amount),
-        ],
-        data: None,
-    })
 }
 
 pub fn change_admin<S: Storage, A: Api, Q: Querier>(
@@ -383,6 +386,9 @@ mod tests {
             ))
         );
 
+        let withdraw_err = withdraw_helper(&mut deps, "c", Some(add_decimals(2000))).unwrap_err();
+        assert_eq!(withdraw_err, StdError::generic_err("not a beneficiary"));
+
         let mut sum_a = 0;
         let mut sum_b = 0;
         let mut withdrawn_a = 0;
@@ -432,6 +438,8 @@ mod tests {
             &mut total_withdrawn,
             total_weight,
         )?;
+
+        add_tax(add_decimals(2_000_000), &mut deps, &mut total_tax_received)?;
 
         withdraw_tester(
             &mut deps,
