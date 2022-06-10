@@ -219,9 +219,8 @@ mod tests {
     use cosmwasm_std::testing::{
         mock_dependencies, mock_env, MockApi, MockQuerier, MockStorage, MOCK_CONTRACT_ADDR,
     };
-    use cosmwasm_std::{
-        coins, from_binary, BalanceResponse, BankQuery, Coin, QueryRequest, StdError, StdResult,
-    };
+    use cosmwasm_std::{Coin, StdError, StdResult};
+    use std::any::type_name;
 
     fn add_decimals(amount: u128) -> u128 {
         amount * 10_u128.pow(6)
@@ -385,10 +384,14 @@ mod tests {
         );
 
         let withdraw_err = withdraw_helper(&mut deps, "c", Some(add_decimals(2000))).unwrap_err();
-        assert_eq!(withdraw_err, StdError::generic_err("not a beneficiary"));
+        assert_eq!(
+            withdraw_err,
+            StdError::generic_err(format!(
+                "cannot load beneficiary: {:?}",
+                StdError::not_found(type_name::<StoredBeneficiary>())
+            ))
+        );
 
-        let mut sum_a = 0;
-        let mut sum_b = 0;
         let mut withdrawn_a = 0;
         let mut withdrawn_b = 0;
         let mut total_withdrawn = 0;
