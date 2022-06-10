@@ -56,37 +56,34 @@ pub fn withdraw<S: Storage, A: Api, Q: Querier>(
     env: Env,
     amount: Option<u128>,
 ) -> HandleResult {
-    let beneficiary = StoredBeneficiary::load(&deps.storage, &env.message.sender)?;
-    if let Some(mut beneficiary) = beneficiary {
-        let config = Config::load(&deps.storage)?;
-        let mut tax_pool = TaxPool::load_updated(deps, &config)?;
+    let mut beneficiary = StoredBeneficiary::load(&deps.storage, &env.message.sender)
+        .map_err(|e| StdError::generic_err(format!("cannot load beneficiary: {:?}", e)))?;
+    let config = Config::load(&deps.storage)?;
+    let mut tax_pool = TaxPool::load_updated(deps, &config)?;
 
-        let beneficiary_balance = beneficiary.get_balance(&tax_pool);
-        let amount = amount.unwrap_or(beneficiary_balance); // If not specified - get everything
+    let beneficiary_balance = beneficiary.get_balance(&tax_pool);
+    let amount = amount.unwrap_or(beneficiary_balance); // If not specified - get everything
 
-        if amount > beneficiary_balance {
-            return Err(StdError::generic_err(format!(
-                "insufficient funds to withdraw: balance={}, required={}",
-                beneficiary_balance, amount,
-            )));
-        }
-
-        beneficiary.withdrawn += amount;
-        tax_pool.total_withdrawn += amount;
-        beneficiary.save(&mut deps.storage, &env.message.sender)?;
-        tax_pool.save(&mut deps.storage)?;
-
-        Ok(HandleResponse {
-            messages: vec![send_native_token_msg(&env.message.sender, amount, &config)],
-            log: vec![
-                plaintext_log("tax_withdrawn", env.message.sender),
-                plaintext_log("amount", amount),
-            ],
-            data: None,
-        })
-    } else {
-        Err(StdError::generic_err("not a beneficiary"))
+    if amount > beneficiary_balance {
+        return Err(StdError::generic_err(format!(
+            "insufficient funds to withdraw: balance={}, required={}",
+            beneficiary_balance, amount,
+        )));
     }
+
+    beneficiary.withdrawn += amount;
+    tax_pool.total_withdrawn += amount;
+    beneficiary.save(&mut deps.storage, &env.message.sender)?;
+    tax_pool.save(&mut deps.storage)?;
+
+    Ok(HandleResponse {
+        messages: vec![send_native_token_msg(&env.message.sender, amount, &config)],
+        log: vec![
+            plaintext_log("tax_withdrawn", env.message.sender),
+            plaintext_log("amount", amount),
+        ],
+        data: None,
+    })
 }
 
 pub fn change_admin<S: Storage, A: Api, Q: Querier>(
@@ -123,7 +120,7 @@ pub fn set_beneficiaries<S: Storage, A: Api, Q: Querier>(
     // Send all tokens to existing beneficiaries and delete
     let current_beneficiaries = BeneficiariesList::load(&deps.storage)?;
     for b_addr in current_beneficiaries {
-        let b = StoredBeneficiary::load(&deps.storage, &b_addr)?.unwrap_or_default();
+        let b = StoredBeneficiary::load(&deps.storage, &b_addr).unwrap_or_default();
         let balance = b.get_balance(&tax_pool);
 
         messages.push(send_native_token_msg(&b_addr, balance, &config));
@@ -191,7 +188,7 @@ pub fn get_beneficiaries<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>)
     let beneficiaries = BeneficiariesList::load(&deps.storage)?;
     let mut stored_beneficiaries = vec![];
     for b_addr in beneficiaries {
-        let stored = StoredBeneficiary::load(&deps.storage, &b_addr)?.unwrap_or_default();
+        let stored = StoredBeneficiary::load(&deps.storage, &b_addr).unwrap_or_default();
         stored_beneficiaries.push(stored);
     }
 
@@ -204,7 +201,8 @@ pub fn get_beneficiary_balance<S: Storage, A: Api, Q: Querier>(
 ) -> QueryResult {
     let config = Config::load(&deps.storage)?;
     let tax_pool = TaxPool::load_updated(deps, &config)?;
-    let beneficiary = StoredBeneficiary::load(&deps.storage, &address)?.unwrap_or_default();
+    let beneficiary = StoredBeneficiary::load(&deps.storage, &address)
+        .map_err(|e| StdError::generic_err(format!("cannot load beneficiary: {:?}", e)))?;
 
     to_binary(&Uint128::from(beneficiary.get_balance(&tax_pool)))
 }

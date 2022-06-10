@@ -102,12 +102,9 @@ impl StoredBeneficiary {
         }
     }
 
-    pub fn load<S: ReadonlyStorage>(
-        storage: &S,
-        beneficiary: &HumanAddr,
-    ) -> StdResult<Option<Self>> {
+    pub fn load<S: ReadonlyStorage>(storage: &S, beneficiary: &HumanAddr) -> StdResult<Self> {
         let beneficiary_store = ReadonlyPrefixedStorage::new(BENEFICIARY_PREFIX, storage);
-        TypedStore::attach(&beneficiary_store).may_load(beneficiary.0.as_bytes())
+        TypedStore::attach(&beneficiary_store).load(beneficiary.0.as_bytes())
     }
 
     pub fn save<S: Storage>(&self, storage: &mut S, beneficiary: &HumanAddr) -> StdResult<()> {
