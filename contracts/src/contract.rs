@@ -3,7 +3,7 @@ use cosmwasm_std::{
     InitResponse, InitResult, Querier, QueryResult, StdError, Storage, Uint128,
 };
 
-use crate::msg::{HandleMsg, InitMsg, QueryMsg};
+use crate::msg::{HandleMsg, InitMsg, QueryAnswer, QueryBeneficiary, QueryMsg};
 use crate::state::{BeneficiariesList, Beneficiary, Config, StoredBeneficiary, TaxPool};
 use crate::util::{query_token_balance, send_native_token_msg};
 
@@ -186,13 +186,19 @@ pub fn query<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>, msg: QueryM
 
 pub fn get_beneficiaries<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>) -> QueryResult {
     let beneficiaries = BeneficiariesList::load(&deps.storage)?;
-    let mut stored_beneficiaries = vec![];
+    let mut result_list = vec![];
     for b_addr in beneficiaries {
         let stored = StoredBeneficiary::load(&deps.storage, &b_addr).unwrap_or_default();
-        stored_beneficiaries.push(stored);
+        result_list.push(QueryBeneficiary {
+            address: b_addr,
+            weight: stored.weight,
+            withdrawn: Uint128::from(stored.withdrawn),
+        });
     }
 
-    to_binary(&stored_beneficiaries)
+    to_binary(&QueryAnswer::GetBeneficiaries {
+        beneficiaries: result_list,
+    })
 }
 
 pub fn get_beneficiary_balance<S: Storage, A: Api, Q: Querier>(
@@ -204,13 +210,17 @@ pub fn get_beneficiary_balance<S: Storage, A: Api, Q: Querier>(
     let beneficiary = StoredBeneficiary::load(&deps.storage, &address)
         .map_err(|e| StdError::generic_err(format!("cannot load beneficiary: {:?}", e)))?;
 
-    to_binary(&Uint128::from(beneficiary.get_balance(&tax_pool)))
+    to_binary(&QueryAnswer::GetBeneficiaryBalance {
+        balance: Uint128::from(beneficiary.get_balance(&tax_pool)),
+    })
 }
 
 pub fn get_admin<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>) -> QueryResult {
     let config = Config::load(&deps.storage)?;
 
-    to_binary(&config.admin)
+    to_binary(&QueryAnswer::GetAdmin {
+        address: config.admin,
+    })
 }
 
 #[cfg(test)]
@@ -285,7 +295,7 @@ mod tests {
                 messages: vec![send_native_token_msg(
                     &beneficiary.address,
                     expected,
-                    &config
+                    &config,
                 )],
                 log: vec![
                     plaintext_log("tax_withdrawn", beneficiary.address.clone()),
@@ -345,7 +355,7 @@ mod tests {
 
         assert_eq!(
             init_error,
-            StdError::generic_err("The sum of weights must be exactly 100%",)
+            StdError::generic_err("The sum of weights must be exactly 100%")
         );
 
         let init_result = init(
