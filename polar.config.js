@@ -49,7 +49,6 @@ const networks = {
         keyringBackend: "test",
         accounts: accounts,
         types: {},
-        fees: default_fees,
     },
 };
 
