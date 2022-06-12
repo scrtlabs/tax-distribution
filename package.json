@@ -7,7 +7,7 @@
     "@types/chai": "^4.3.0",
     "chai": "^4.3.4",
     "prettier": "^2.6.2",
-    "secret-polar": "file:../polar/packages/polar",
+    "secret-polar": "^0.9.8",
     "secretjs": "^1.2.0-beta.68"
   }
 }
