@@ -1,5 +1,10 @@
 const { expect, use, assert } = require("chai");
-const { Contract, getAccountByName, polarChai } = require("secret-polar");
+const {
+    Contract,
+    getAccountByName,
+    polarChai,
+    createAccounts,
+} = require("secret-polar");
 const { Wallet, SecretNetworkClient, TxResultCode } = require("secretjs");
 
 use(polarChai);
@@ -93,8 +98,7 @@ describe("sample_project", () => {
         };
     }
 
-    it("deploy and init", async () => {
-        this._timeout = 1000000000;
+    it("Instantiate", async () => {
         const {
             cli,
             contract_owner,
@@ -152,7 +156,7 @@ describe("sample_project", () => {
         });
     });
 
-    it("sanity", async () => {
+    it("Chagne admin", async () => {
         const {
             cli,
             contract_owner,
@@ -187,42 +191,118 @@ describe("sample_project", () => {
             `Successfully deployed contract: ${contract_info.contractAddress}`
         );
 
-        await handleTx(
-            await cli.tx.bank.send({
-                amount: [{ amount: "100000000", denom: "uscrt" }],
-                fromAddress: contract_owner.account.address,
-                toAddress: contract_info.contractAddress,
-            }),
-            "send"
+        await contract.tx.emergency_withdraw({
+            account: contract_owner,
+        });
+        await expect(
+            contract.tx.emergency_withdraw({
+                account: beneficiary_1,
+            })
+        ).to.be.revertedWith("not allowed");
+
+        await expect(
+            contract.tx.change_admin(
+                { account: beneficiary_1 },
+                { new_admin: beneficiary_2.account.address }
+            )
+        ).to.be.revertedWith("not allowed");
+
+        await contract.tx.change_admin(
+            { account: contract_owner },
+            { new_admin: beneficiary_1.account.address }
         );
 
-        await handleWithdraw(contract, beneficiary_1, "30000000");
-        await handleWithdraw(contract, beneficiary_2, "10000000", "10000000");
-
-        await handleTx(
-            await cli.tx.bank.send({
-                amount: [{ amount: "1000000000000", denom: "uscrt" }],
-                fromAddress: contract_owner.account.address,
-                toAddress: contract_info.contractAddress,
-            }),
-            "send"
-        );
-
-        await handleWithdraw(contract, beneficiary_1, "300000000000");
-        await handleWithdraw(contract, beneficiary_2, "500040000000");
-        await handleWithdraw(contract, beneficiary_3, "200020000000");
-
-        await handleTx(
-            await cli.tx.bank.send({
-                amount: [{ amount: "123456123456", denom: "uscrt" }],
-                fromAddress: contract_owner.account.address,
-                toAddress: contract_info.contractAddress,
-            }),
-            "send"
-        );
-
-        await handleWithdraw(contract, beneficiary_1, "37036837036");
-        await handleWithdraw(contract, beneficiary_2, "61728061728");
-        await handleWithdraw(contract, beneficiary_3, "24691224691");
+        await expect(
+            contract.tx.emergency_withdraw({
+                account: contract_owner,
+            })
+        ).to.be.revertedWith("not allowed");
+        await contract.tx.emergency_withdraw({
+            account: beneficiary_1,
+        });
     });
+
+    it("Set beneficiaries", async () => {});
+
+    it("Emergency withdraw", async () => {});
+
+    it("Query get beneficiaries", async () => {});
+
+    it("Query get beneficiary balance", async () => {});
+
+    it("Query get admin", async () => {});
+
+    // it("Sanity run", async () => {
+    //     const {
+    //         cli,
+    //         contract_owner,
+    //         contract,
+    //         beneficiary_1,
+    //         beneficiary_2,
+    //         beneficiary_3,
+    //     } = await setup();
+
+    //     const contract_info = await contract.instantiate(
+    //         {
+    //             beneficiaries: [
+    //                 {
+    //                     address: beneficiary_1.account.address,
+    //                     weight: 300,
+    //                 },
+    //                 {
+    //                     address: beneficiary_2.account.address,
+    //                     weight: 500,
+    //                 },
+    //                 {
+    //                     address: beneficiary_3.account.address,
+    //                     weight: 200,
+    //                 },
+    //             ],
+    //             decimal_places_in_weights: 3,
+    //         },
+    //         "deploy test",
+    //         contract_owner
+    //     );
+    //     console.log(
+    //         `Successfully deployed contract: ${contract_info.contractAddress}`
+    //     );
+
+    //     await handleTx(
+    //         await cli.tx.bank.send({
+    //             amount: [{ amount: "100000000", denom: "uscrt" }],
+    //             fromAddress: contract_owner.account.address,
+    //             toAddress: contract_info.contractAddress,
+    //         }),
+    //         "send"
+    //     );
+
+    //     await handleWithdraw(contract, beneficiary_1, "30000000");
+    //     await handleWithdraw(contract, beneficiary_2, "10000000", "10000000");
+
+    //     await handleTx(
+    //         await cli.tx.bank.send({
+    //             amount: [{ amount: "1000000000000", denom: "uscrt" }],
+    //             fromAddress: contract_owner.account.address,
+    //             toAddress: contract_info.contractAddress,
+    //         }),
+    //         "send"
+    //     );
+
+    //     await handleWithdraw(contract, beneficiary_1, "300000000000");
+    //     await handleWithdraw(contract, beneficiary_2, "500040000000");
+    //     await handleWithdraw(contract, beneficiary_3, "200020000000");
+
+    //     await handleTx(
+    //         await cli.tx.bank.send({
+    //             amount: [{ amount: "123456123456", denom: "uscrt" }],
+    //             fromAddress: contract_owner.account.address,
+    //             toAddress: contract_info.contractAddress,
+    //         }),
+    //         "send"
+    //     );
+
+    //     await handleWithdraw(contract, beneficiary_1, "37036837036");
+    //     await handleWithdraw(contract, beneficiary_2, "61728061728");
+    //     await handleWithdraw(contract, beneficiary_3, "24691224691");
+    // });
 });
