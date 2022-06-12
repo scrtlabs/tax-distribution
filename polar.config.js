@@ -41,22 +41,15 @@ const networks = {
         chainId: "enigma-pub-testnet-3",
         types: {},
     },
-    // Supernova Testnet
-    supernova: {
-        endpoint: "http://bootstrap.supernova.enigma.co:1317",
-        chainId: "supernova-2",
+    ci: {
+        endpoint: "http://0.0.0.0:1317",
+        nodeId: "115aa0a629f5d70dd1d464bc7e42799e00f4edae",
+        chainId: "secretdev-1",
+        trustNode: true,
+        keyringBackend: "test",
         accounts: accounts,
         types: {},
-        fees: {
-            upload: {
-                amount: [{ amount: "500000", denom: "uscrt" }],
-                gas: "2000000",
-            },
-            init: {
-                amount: [{ amount: "125000", denom: "uscrt" }],
-                gas: "500000",
-            },
-        },
+        fees: default_fees,
     },
 };
 
