@@ -166,8 +166,13 @@ pub fn emergency_withdraw<S: Storage, A: Api, Q: Querier>(
 
     let balance = query_token_balance(&deps.querier, &config)?;
 
+    let mut messages = vec![];
+    if balance > 0 {
+        messages.push(send_native_token_msg(&env.message.sender, balance, &config));
+    }
+
     Ok(HandleResponse {
-        messages: vec![send_native_token_msg(&env.message.sender, balance, &config)],
+        messages,
         log: vec![
             plaintext_log("emergency_withdraw", env.message.sender),
             plaintext_log("amount", balance),
