@@ -54,9 +54,10 @@ const networks = {
 
 module.exports = {
     networks: {
-        default: networks.testnet,
+        default: networks.localnet,
         localnet: networks.localnet,
         development: networks.development,
+        ci: networks.ci,
     },
     mocha: {
         timeout: 10000000000,
