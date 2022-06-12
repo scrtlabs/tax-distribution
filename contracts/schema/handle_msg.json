@@ -5,33 +5,108 @@
     {
       "type": "object",
       "required": [
-        "increment"
+        "withdraw"
       ],
       "properties": {
-        "increment": {
-          "type": "object"
+        "withdraw": {
+          "type": "object",
+          "properties": {
+            "amount": {
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/Uint128"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
         }
       }
     },
     {
       "type": "object",
       "required": [
-        "reset"
+        "change_admin"
       ],
       "properties": {
-        "reset": {
+        "change_admin": {
           "type": "object",
           "required": [
-            "count"
+            "new_admin"
           ],
           "properties": {
-            "count": {
-              "type": "integer",
-              "format": "int32"
+            "new_admin": {
+              "$ref": "#/definitions/HumanAddr"
             }
           }
         }
       }
+    },
+    {
+      "type": "object",
+      "required": [
+        "set_beneficiaries"
+      ],
+      "properties": {
+        "set_beneficiaries": {
+          "type": "object",
+          "required": [
+            "beneficiaries",
+            "decimal_places_in_weights"
+          ],
+          "properties": {
+            "beneficiaries": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Beneficiary"
+              }
+            },
+            "decimal_places_in_weights": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": [
+        "emergency_withdraw"
+      ],
+      "properties": {
+        "emergency_withdraw": {
+          "type": "object"
+        }
+      }
     }
-  ]
+  ],
+  "definitions": {
+    "Beneficiary": {
+      "type": "object",
+      "required": [
+        "address",
+        "weight"
+      ],
+      "properties": {
+        "address": {
+          "$ref": "#/definitions/HumanAddr"
+        },
+        "weight": {
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0.0
+        }
+      }
+    },
+    "HumanAddr": {
+      "type": "string"
+    },
+    "Uint128": {
+      "type": "string"
+    }
+  }
 }
