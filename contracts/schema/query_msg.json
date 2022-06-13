@@ -5,13 +5,48 @@
     {
       "type": "object",
       "required": [
-        "get_count"
+        "get_beneficiaries"
       ],
       "properties": {
-        "get_count": {
+        "get_beneficiaries": {
+          "type": "object"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": [
+        "get_beneficiary_balance"
+      ],
+      "properties": {
+        "get_beneficiary_balance": {
+          "type": "object",
+          "required": [
+            "address"
+          ],
+          "properties": {
+            "address": {
+              "$ref": "#/definitions/HumanAddr"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": [
+        "get_admin"
+      ],
+      "properties": {
+        "get_admin": {
           "type": "object"
         }
       }
     }
-  ]
+  ],
+  "definitions": {
+    "HumanAddr": {
+      "type": "string"
+    }
+  }
 }
